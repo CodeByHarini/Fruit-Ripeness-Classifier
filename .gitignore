@@ -1,0 +1,3 @@
+cd "C:\Users\hello\Downloads\Fruit Ripeness Classifier"
+New-Item -Path . -Name ".gitignore" -ItemType "file"
+notepad .gitignore
