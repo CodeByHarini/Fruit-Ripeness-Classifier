@@ -2,13 +2,6 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import tensorflow as tf
-from pyngrok import ngrok
-
-# -------------------------------
-# Start ngrok tunnel
-# -------------------------------
-public_url = ngrok.connect(8501)  # Streamlit default port
-st.write(f"🌐 Public URL for this app: [{public_url}]({public_url})")
 
 # -------------------------------
 # Load TFLite model
@@ -24,14 +17,14 @@ output_details = interpreter.get_output_details()
 # -------------------------------
 # Helper function: preprocess image
 # -------------------------------
-def preprocess_image(image):
-    image = image.convert("RGB")
-    input_shape = input_details[0]['shape']  # e.g., [1, 150, 150, 3]
-    height, width = input_shape[1], input_shape[2]
-    image = image.resize((width, height))
-    image = np.array(image, dtype=np.float32) / 255.0
-    image = np.expand_dims(image, axis=0)
-    return image
+def preprocess_image(image, target_size=(128, 128)):
+    image = image.resize(target_size)
+    image = np.array(image)
+    if image.shape[-1] == 4:  # convert RGBA to RGB
+        image = image[..., :3]
+    image = image / 255.0  # normalize
+    image = np.expand_dims(image, axis=0)  # add batch dimension
+    return image.astype(np.float32)
 
 # -------------------------------
 # Helper function: predict
@@ -59,6 +52,8 @@ if uploaded_file is not None:
 
     if st.button("Predict Ripeness"):
         predicted_class, confidence = predict(image)
+
+        # Map class index to labels (update according to your model's classes)
         class_labels = ["Unripe", "Ripe", "Overripe"]
         st.write(f"**Prediction:** {class_labels[predicted_class]}")
         st.write(f"**Confidence:** {confidence*100:.2f}%")
