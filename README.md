@@ -16,8 +16,7 @@ The app is deployed temporarily using **ngrok**.
 - Optional public sharing using **ngrok**
 
 ## 📸 Screenshots
-![App Screenshot](screenshots/app_screenshot.png)  
-*Upload an image and get predictions instantly.*
+![App Screenshot](sampleoutput.png) 
 
 ## ⚙ Installation / Setup
 
