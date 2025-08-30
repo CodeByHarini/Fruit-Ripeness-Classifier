@@ -3,17 +3,28 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 from pyngrok import ngrok
+import os
 
 # -------------------------------
-# Start ngrok tunnel
+# CONFIGURATION
 # -------------------------------
-public_url = ngrok.connect(8501)  # Streamlit default port
-st.write(f"🌐 Public URL for this app: [{public_url}]({public_url})")
+# Kill any existing tunnels first
+ngrok.kill()
+
+# Start a new ngrok tunnel for Streamlit
+public_url = ngrok.connect(8501)
+st.markdown(f"🌐 **Live App URL:** [Click here to open]({public_url})")
+
+# Path to your TFLite model
+tflite_model_path = os.path.join(
+    os.getcwd(),
+    "Models",
+    "fruit_ripeness_model_final.tflite"
+)
 
 # -------------------------------
 # Load TFLite model
 # -------------------------------
-tflite_model_path = r"C:\Users\hello\Downloads\Fruit Ripeness Classifier\Models\fruit_ripeness_model_final.tflite"
 interpreter = tf.lite.Interpreter(model_path=tflite_model_path)
 interpreter.allocate_tensors()
 
@@ -26,7 +37,7 @@ output_details = interpreter.get_output_details()
 # -------------------------------
 def preprocess_image(image):
     image = image.convert("RGB")
-    input_shape = input_details[0]['shape']  # e.g., [1, 150, 150, 3]
+    input_shape = input_details[0]['shape']  # [1, height, width, 3]
     height, width = input_shape[1], input_shape[2]
     image = image.resize((width, height))
     image = np.array(image, dtype=np.float32) / 255.0
@@ -34,7 +45,7 @@ def preprocess_image(image):
     return image
 
 # -------------------------------
-# Helper function: predict
+# Helper function: make prediction
 # -------------------------------
 def predict(image):
     input_data = preprocess_image(image)
@@ -60,5 +71,5 @@ if uploaded_file is not None:
     if st.button("Predict Ripeness"):
         predicted_class, confidence = predict(image)
         class_labels = ["Unripe", "Ripe", "Overripe"]
-        st.write(f"**Prediction:** {class_labels[predicted_class]}")
-        st.write(f"**Confidence:** {confidence*100:.2f}%")
+        st.success(f"**Prediction:** {class_labels[predicted_class]}")
+        st.info(f"**Confidence:** {confidence*100:.2f}%")
