@@ -1,75 +1,85 @@
-import streamlit as st
-import numpy as np
-from PIL import Image
-import tensorflow as tf
-from pyngrok import ngrok
 import os
+import numpy as np
+import tensorflow as tf
+from PIL import Image
+from pyngrok import ngrok, exception
+import streamlit as st
 
-# -------------------------------
-# CONFIGURATION
-# -------------------------------
-# Kill any existing tunnels first
-ngrok.kill()
+# ------------------------------
+# Paths
+# ------------------------------
+h5_model_path = r"C:\Users\hello\Downloads\Fruit Ripeness Classifier\Backup\Models\fruit_ripeness_model_final.h5"
+tflite_model_path = r"C:\Users\hello\Downloads\Fruit Ripeness Classifier\Backup\Models\fruit_ripeness_model_final.tflite"
 
-# Start a new ngrok tunnel for Streamlit
-public_url = ngrok.connect(8501)
-st.markdown(f"🌐 **Live App URL:** [Click here to open]({public_url})")
+# ------------------------------
+# Step 1: Convert .h5 to .tflite if missing
+# ------------------------------
+if not os.path.exists(tflite_model_path):
+    if not os.path.exists(h5_model_path):
+        raise FileNotFoundError(f"H5 model not found at {h5_model_path}")
+    st.info("TFLite model not found. Converting from H5...")
+    model = tf.keras.models.load_model(h5_model_path)
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    tflite_model = converter.convert()
+    with open(tflite_model_path, "wb") as f:
+        f.write(tflite_model)
+    st.success("TFLite model created successfully!")
+else:
+    st.info("TFLite model exists. Loading...")
 
-# Path to your TFLite model
-tflite_model_path = os.path.join(
-    os.getcwd(),
-    "Models",
-    "fruit_ripeness_model_final.tflite"
-)
-
-# -------------------------------
-# Load TFLite model
-# -------------------------------
+# ------------------------------
+# Step 2: Load TFLite model
+# ------------------------------
 interpreter = tf.lite.Interpreter(model_path=tflite_model_path)
 interpreter.allocate_tensors()
-
-# Get input and output details
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# -------------------------------
-# Helper function: preprocess image
-# -------------------------------
-def preprocess_image(image):
-    image = image.convert("RGB")
-    input_shape = input_details[0]['shape']  # [1, height, width, 3]
-    height, width = input_shape[1], input_shape[2]
-    image = image.resize((width, height))
-    image = np.array(image, dtype=np.float32) / 255.0
-    image = np.expand_dims(image, axis=0)
-    return image
+# ------------------------------
+# Step 3: Start Ngrok safely
+# ------------------------------
+port = 8501
+public_url = None
+try:
+    ngrok.kill()  # kill existing tunnels
+    public_url = ngrok.connect(port)
+    print(f"🌐 Live App URL: {public_url}")
+except exception.PyngrokNgrokError as e:
+    st.warning(f"Ngrok error: {e}")
 
-# -------------------------------
-# Helper function: make prediction
-# -------------------------------
-def predict(image):
-    input_data = preprocess_image(image)
+# ------------------------------
+# Step 4: Streamlit UI
+# ------------------------------
+st.set_page_config(page_title="Fruit Ripeness Classifier")
+st.title("🍎 Fruit Ripeness Classifier")
+
+if public_url:
+    st.markdown(f"🌐 **Live App URL:** [{public_url}]({public_url})")
+
+st.write("Upload an image of a fruit to predict its ripeness.")
+
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    # Load and display image
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_column_width=True)
+
+    # Preprocess image to match model input
+    img_size = input_details[0]['shape'][1]  # assumes square input
+    image_resized = image.resize((img_size, img_size))
+    input_data = np.array(image_resized, dtype=np.float32)
+    input_data = np.expand_dims(input_data, axis=0)  # add batch dimension
+
+    # Set tensor and invoke interpreter
     interpreter.set_tensor(input_details[0]['index'], input_data)
     interpreter.invoke()
     output_data = interpreter.get_tensor(output_details[0]['index'])
-    predicted_class = np.argmax(output_data, axis=1)[0]
-    confidence = np.max(output_data)
-    return predicted_class, confidence
 
-# -------------------------------
-# Streamlit UI
-# -------------------------------
-st.title("🍎 Fruit Ripeness Classifier")
-st.write("Upload an image of a fruit to check its ripeness.")
+    # Process prediction
+    predicted_class = np.argmax(output_data[0])
+    confidence = np.max(output_data[0]) * 100
 
-uploaded_file = st.file_uploader("Choose a fruit image...", type=["jpg", "jpeg", "png"])
-
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
-
-    if st.button("Predict Ripeness"):
-        predicted_class, confidence = predict(image)
-        class_labels = ["Unripe", "Ripe", "Overripe"]
-        st.success(f"**Prediction:** {class_labels[predicted_class]}")
-        st.info(f"**Confidence:** {confidence*100:.2f}%")
+    # Map class index to labels (adjust according to your training)
+    class_labels = ["Unripe", "Ripe", "Overripe"]
+    st.success(f"Prediction: **{class_labels[predicted_class]}** ({confidence:.2f}%)")
