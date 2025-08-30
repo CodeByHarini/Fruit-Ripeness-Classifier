@@ -1,3 +1,4 @@
 Models/*.h5 filter=lfs diff=lfs merge=lfs -text
 *.h5 filter=lfs diff=lfs merge=lfs -text
 *.tflite filter=lfs diff=lfs merge=lfs -text
+Models/fruit_ripeness_model_final.tflite filter=lfs diff=lfs merge=lfs -text
